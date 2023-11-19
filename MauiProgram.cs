@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Logging;
+using Simplz.Speedometer.Services;
 
 namespace Simplz.Speedometer
 {
@@ -19,6 +20,10 @@ namespace Simplz.Speedometer
 #if DEBUG
     		builder.Services.AddBlazorWebViewDeveloperTools();
     		builder.Logging.AddDebug();
+#endif
+
+#if ANDROID
+        builder.Services.AddSingleton<ILocationService, LocationService>();
 #endif
 
             return builder.Build();

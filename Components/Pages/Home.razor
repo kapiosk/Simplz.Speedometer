@@ -1,5 +1,43 @@
 ﻿@page "/"
+@using Simplz.Speedometer.Services
+@inject ILocationService locationService
+<h1>@message</h1>
+<h2>@lat - @lon, @alt</h2>
+<h2>@course</h2>
+<h2>@speed</h2>
+<h2>@distance</h2>
 
-<h1>Hello, world!</h1>
+@code
+{
+    private double speed, lat, lon, alt, acc, course, distance;
+    private bool reducedAccuracy;
+    private Timer? timer;
+    private string? message;
 
-Welcome to your new app.
+    protected override void OnInitialized()
+    {
+        timer = new(new TimerCallback(async _ =>
+        {
+            try
+            {
+                var loc = await locationService.GetCurrentLocation();
+                if (loc is not null)
+                {
+                    distance += loc.CalculateDistance(lat, lon, DistanceUnits.Kilometers);
+                    speed = loc.Speed ?? 0;
+                    lat = loc.Latitude;
+                    lon = loc.Longitude;
+                    alt = loc.Altitude ?? 0;
+                    acc = loc.Accuracy ?? 0;
+                    course = loc.Course ?? 0;
+                    reducedAccuracy = loc.ReducedAccuracy;
+                }
+                await InvokeAsync(() => StateHasChanged());
+            }
+            catch (Exception ex)
+            {
+                message = ex.Message;
+            }
+        }), null, 1000, 1000);
+    }
+}
