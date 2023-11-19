@@ -1,43 +1,164 @@
 ﻿@page "/"
-@using Simplz.Speedometer.Services
-@inject ILocationService locationService
-<h1>@message</h1>
-<h2>@lat - @lon, @alt</h2>
-<h2>@course</h2>
-<h2>@speed</h2>
-<h2>@distance</h2>
+
+<div class="card text-center">
+    <h5 class="card-title">@speed.ToString("F") km/h</h5>
+    <div class="card-body">
+        <div class="progress">
+            <div class="progress-bar" role="progressbar" aria-valuenow="@speed" aria-valuemin="0" aria-valuemax="120">
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card text-center">
+    <div class="card-body">
+        <p class="card-text">@distance.ToString("F")</p>
+        <a href="#" class="btn btn-@geolocation" @onclick=ToggleGeolocation>Toggle</a>
+        <a href="#" class="btn btn-primary" @onclick=ClearDistance>Clear</a>
+    </div>
+</div>
+
+<div class="card text-center">
+    <div class="card-body">
+        <p class="card-text">@heading.ToString("F")</p>
+        <a href="#" class="btn btn-@compass" @onclick=ToggleCompass>Toggle</a>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(message))
+{
+    <div class="alert alert-danger" role="alert">
+        @message
+    </div>
+}
 
 @code
 {
-    private double speed, lat, lon, alt, acc, course, distance;
-    private bool reducedAccuracy;
-    private Timer? timer;
+    private double speed, distance, heading;
+    private Location? location;
     private string? message;
+    private string compass = "danger";
+    private string geolocation = "danger";
+    private Timer? timer;
+
+    private void ToggleCompass()
+    {
+        try
+        {
+            if (Compass.Default.IsSupported)
+            {
+                if (!Compass.Default.IsMonitoring)
+                {
+                    Compass.Default.ReadingChanged += Compass_ReadingChanged;
+                    Compass.Default.Start(SensorSpeed.Default, applyLowPassFilter: true);
+                    compass = "success";
+                }
+                else
+                {
+                    Compass.Default.Stop();
+                    Compass.Default.ReadingChanged -= Compass_ReadingChanged;
+                    compass = "danger";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            message = ex.Message;
+        }
+    }
+
+    private void Compass_ReadingChanged(object? sender, CompassChangedEventArgs e)
+    {
+        try
+        {
+            heading = e.Reading.HeadingMagneticNorth;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            message = ex.Message;
+        }
+    }
+
+    private void ClearDistance()
+    {
+        distance = 0;
+    }
+
+    private void ToggleGeolocation()
+    {
+        try
+        {
+            if (timer is null)
+            {
+                timer = new(new TimerCallback(async _ =>
+                {
+                    try
+                    {
+                        var request = new GeolocationRequest(GeolocationAccuracy.Best, TimeSpan.FromSeconds(1));
+                        var loc = await Geolocation.GetLocationAsync(request);
+                        if (loc is not null)
+                            Geolocation_LocationChanged(null, loc);
+                    }
+                    catch (Exception ex)
+                    {
+                        message = ex.Message;
+                    }
+                }), null, 1000, 1000);
+                geolocation = "success";
+            }
+            else
+            {
+                timer.Dispose();
+                timer = null;
+                geolocation = "danger";
+            }
+            @* if (Geolocation.Default.IsListeningForeground)
+{
+Geolocation.Default.LocationChanged -= Geolocation_LocationChanged;
+Geolocation.Default.StopListeningForeground();
+
+}
+else
+{
+Geolocation.Default.LocationChanged += Geolocation_LocationChanged;
+var request = new GeolocationListeningRequest();
+var status = await Geolocation.Default.StartListeningForegroundAsync(request);
+if (status)
+geolocation = "success";
+} *@
+        }
+        catch (Exception ex)
+        {
+            message = ex.Message;
+        }
+    }
+
+    private void Geolocation_LocationChanged(object? sender, Location location)// GeolocationLocationChangedEventArgs e)
+    {
+        try
+        {
+            speed = (location.Speed ?? 0) / 1000 * 3600;
+            if (this.location is not null)
+                distance += location.CalculateDistance(location, DistanceUnits.Kilometers);
+            this.location = location;
+            @* StateHasChanged(); *@
+        }
+        catch (Exception ex)
+        {
+            message = ex.Message;
+        }
+    }
 
     protected override void OnInitialized()
     {
-        timer = new(new TimerCallback(async _ =>
+        try
         {
-            try
-            {
-                var loc = await locationService.GetCurrentLocation();
-                if (loc is not null)
-                {
-                    distance += loc.CalculateDistance(lat, lon, DistanceUnits.Kilometers);
-                    speed = loc.Speed ?? 0;
-                    lat = loc.Latitude;
-                    lon = loc.Longitude;
-                    alt = loc.Altitude ?? 0;
-                    acc = loc.Accuracy ?? 0;
-                    course = loc.Course ?? 0;
-                    reducedAccuracy = loc.ReducedAccuracy;
-                }
-                await InvokeAsync(() => StateHasChanged());
-            }
-            catch (Exception ex)
-            {
-                message = ex.Message;
-            }
-        }), null, 1000, 1000);
+            Microsoft.Maui.Devices.DeviceDisplay.Current.KeepScreenOn = true;
+        }
+        catch (Exception ex)
+        {
+            message = ex.Message;
+        }
     }
 }
