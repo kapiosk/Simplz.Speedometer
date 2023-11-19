@@ -22,7 +22,7 @@
         <Nullable>enable</Nullable>
 
         <!-- Display name -->
-        <ApplicationTitle>Simplz.Speedometer</ApplicationTitle>
+        <ApplicationTitle>Speedometer</ApplicationTitle>
 
         <!-- App Identifier -->
         <ApplicationId>com.companyname.simplz.speedometer</ApplicationId>
