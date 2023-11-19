@@ -16,7 +16,7 @@
         <ApplicationTitle>Speedometer</ApplicationTitle>
 
         <!-- App Identifier -->
-        <ApplicationId>com.companyname.simplz.speedometer</ApplicationId>
+        <ApplicationId>solutions.3ai.simplz.speedometer</ApplicationId>
 
         <!-- Versions -->
         <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
