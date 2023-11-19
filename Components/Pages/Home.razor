@@ -1,5 +1,12 @@
 ﻿@page "/"
 
+@if (!string.IsNullOrEmpty(locationName))
+{
+    <div class="alert alert-primary" role="alert">
+        @locationName
+    </div>
+}
+
 <div class="card text-center">
     <h5 class="card-title">@speed.ToString("F") km/h</h5>
     <div class="card-body">
@@ -13,7 +20,7 @@
 <div class="card text-center">
     <div class="card-body">
         <p class="card-text">@distance.ToString("F")</p>
-        <a href="#" class="btn btn-@geolocation" @onclick=ToggleGeolocation>Toggle</a>
+        <a href="#" class="btn btn-@geolocation" @onclick=ToggleGeolocationAsync>Toggle</a>
         <a href="#" class="btn btn-primary" @onclick=ClearDistance>Clear</a>
     </div>
 </div>
@@ -37,9 +44,9 @@
     private double speed, distance, heading;
     private Location? location;
     private string? message;
+    private string? locationName;
     private string compass = "danger";
     private string geolocation = "danger";
-    private Timer? timer;
 
     private void ToggleCompass()
     {
@@ -85,48 +92,27 @@
         distance = 0;
     }
 
-    private void ToggleGeolocation()
+    private async Task ToggleGeolocationAsync()
     {
         try
         {
-            if (timer is null)
+            if (Geolocation.Default.IsListeningForeground)
             {
-                timer = new(new TimerCallback(async _ =>
-                {
-                    try
-                    {
-                        var request = new GeolocationRequest(GeolocationAccuracy.Best, TimeSpan.FromSeconds(1));
-                        var loc = await Geolocation.GetLocationAsync(request);
-                        if (loc is not null)
-                            Geolocation_LocationChanged(null, loc);
-                    }
-                    catch (Exception ex)
-                    {
-                        message = ex.Message;
-                    }
-                }), null, 1000, 1000);
-                geolocation = "success";
+                Geolocation.Default.StopListeningForeground();
+                Geolocation.Default.LocationChanged -= Geolocation_LocationChanged;
+                Geolocation.Default.ListeningFailed -= Geolocation_ListeningFailed;
             }
             else
             {
-                timer.Dispose();
-                timer = null;
-                geolocation = "danger";
+                var request = new GeolocationListeningRequest();
+                var status = await Geolocation.Default.StartListeningForegroundAsync(request);
+                if (status)
+                {
+                    geolocation = "success";
+                    Geolocation.Default.LocationChanged += Geolocation_LocationChanged;
+                    Geolocation.Default.ListeningFailed += Geolocation_ListeningFailed;
+                }
             }
-            @* if (Geolocation.Default.IsListeningForeground)
-{
-Geolocation.Default.LocationChanged -= Geolocation_LocationChanged;
-Geolocation.Default.StopListeningForeground();
-
-}
-else
-{
-Geolocation.Default.LocationChanged += Geolocation_LocationChanged;
-var request = new GeolocationListeningRequest();
-var status = await Geolocation.Default.StartListeningForegroundAsync(request);
-if (status)
-geolocation = "success";
-} *@
         }
         catch (Exception ex)
         {
@@ -134,15 +120,39 @@ geolocation = "success";
         }
     }
 
-    private void Geolocation_LocationChanged(object? sender, Location location)// GeolocationLocationChangedEventArgs e)
+    private void Geolocation_ListeningFailed(object? sender, GeolocationListeningFailedEventArgs e)
+    {
+        message = e.Error.ToString();
+    }
+
+    private void Geolocation_LocationChanged(object? sender, GeolocationLocationChangedEventArgs e)
     {
         try
         {
-            speed = (location.Speed ?? 0) / 1000 * 3600;
-            if (this.location is not null)
-                distance += location.CalculateDistance(location, DistanceUnits.Kilometers);
-            this.location = location;
-            @* StateHasChanged(); *@
+            speed = (e.Location.Speed ?? 0) / 1000 * 3600;
+            if (location is not null)
+                distance += location.CalculateDistance(e.Location, DistanceUnits.Kilometers);
+            location = e.Location;
+            Task.Run(async () =>
+            {
+                try
+                {
+                    var placemarks = await Geocoding.GetPlacemarksAsync(location);
+                    var placemark = placemarks?.FirstOrDefault();
+                    if (placemark is not null)
+                    {
+                        locationName = string.Join(", ", placemark.AdminArea, placemark.CountryName, placemark.FeatureName, placemark.Locality,
+        placemark.PostalCode, placemark.SubAdminArea, placemark.SubLocality, placemark.SubThoroughfare,
+        placemark.Thoroughfare);
+                        await InvokeAsync(() => StateHasChanged());
+                    }
+                }
+                catch (Exception ex)
+                {
+                    message = ex.Message;
+                }
+            });
+            StateHasChanged();
         }
         catch (Exception ex)
         {
@@ -155,6 +165,21 @@ geolocation = "success";
         try
         {
             Microsoft.Maui.Devices.DeviceDisplay.Current.KeepScreenOn = true;
+            @* Timer timer = new(new TimerCallback(async _ =>
+{
+try
+{
+if (location is not null)
+{
+
+}
+await InvokeAsync(() => StateHasChanged());
+}
+catch (Exception ex)
+{
+message = ex.Message;
+}
+}), null, 1000, 1000); *@
         }
         catch (Exception ex)
         {
