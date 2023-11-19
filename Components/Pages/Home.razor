@@ -1,4 +1,5 @@
 ﻿@page "/"
+@implements IDisposable
 
 @if (!string.IsNullOrEmpty(locationName))
 {
@@ -20,7 +21,6 @@
 <div class="card text-center">
     <div class="card-body">
         <p class="card-text">@distance.ToString("F")</p>
-        <a href="#" class="btn btn-@geolocation" @onclick=ToggleGeolocationAsync>Toggle</a>
         <a href="#" class="btn btn-primary" @onclick=ClearDistance>Clear</a>
     </div>
 </div>
@@ -46,7 +46,6 @@
     private string? message;
     private string? locationName;
     private string compass = "danger";
-    private string geolocation = "danger";
 
     private void ToggleCompass()
     {
@@ -92,32 +91,41 @@
         distance = 0;
     }
 
-    private async Task ToggleGeolocationAsync()
+    @* private async Task ToggleGeolocationAsync()
+{
+try
+{
+if (Geolocation.Default.IsListeningForeground)
+{
+Geolocation.Default.StopListeningForeground();
+Geolocation.Default.LocationChanged -= Geolocation_LocationChanged;
+Geolocation.Default.ListeningFailed -= Geolocation_ListeningFailed;
+}
+else
+{
+var request = new GeolocationListeningRequest();
+var status = await Geolocation.Default.StartListeningForegroundAsync(request);
+if (status)
+{
+geolocation = "success";
+Geolocation.Default.LocationChanged += Geolocation_LocationChanged;
+Geolocation.Default.ListeningFailed += Geolocation_ListeningFailed;
+}
+}
+}
+catch (Exception ex)
+{
+message = ex.Message;
+}
+} *@
+
+    public void Dispose()
     {
-        try
-        {
-            if (Geolocation.Default.IsListeningForeground)
-            {
-                Geolocation.Default.StopListeningForeground();
-                Geolocation.Default.LocationChanged -= Geolocation_LocationChanged;
-                Geolocation.Default.ListeningFailed -= Geolocation_ListeningFailed;
-            }
-            else
-            {
-                var request = new GeolocationListeningRequest();
-                var status = await Geolocation.Default.StartListeningForegroundAsync(request);
-                if (status)
-                {
-                    geolocation = "success";
-                    Geolocation.Default.LocationChanged += Geolocation_LocationChanged;
-                    Geolocation.Default.ListeningFailed += Geolocation_ListeningFailed;
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            message = ex.Message;
-        }
+        Compass.Default.Stop();
+        Compass.Default.ReadingChanged -= Compass_ReadingChanged;
+        Geolocation.Default.StopListeningForeground();
+        Geolocation.Default.LocationChanged -= Geolocation_LocationChanged;
+        Geolocation.Default.ListeningFailed -= Geolocation_ListeningFailed;
     }
 
     private void Geolocation_ListeningFailed(object? sender, GeolocationListeningFailedEventArgs e)
@@ -160,11 +168,18 @@
         }
     }
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         try
         {
             Microsoft.Maui.Devices.DeviceDisplay.Current.KeepScreenOn = true;
+            var request = new GeolocationListeningRequest();
+            var status = await Geolocation.Default.StartListeningForegroundAsync(request);
+            if (status)
+            {
+                Geolocation.Default.LocationChanged += Geolocation_LocationChanged;
+                Geolocation.Default.ListeningFailed += Geolocation_ListeningFailed;
+            }
             @* Timer timer = new(new TimerCallback(async _ =>
 {
 try
