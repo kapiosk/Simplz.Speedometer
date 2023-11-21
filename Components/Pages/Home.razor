@@ -91,34 +91,6 @@
         distance = 0;
     }
 
-    @* private async Task ToggleGeolocationAsync()
-{
-try
-{
-if (Geolocation.Default.IsListeningForeground)
-{
-Geolocation.Default.StopListeningForeground();
-Geolocation.Default.LocationChanged -= Geolocation_LocationChanged;
-Geolocation.Default.ListeningFailed -= Geolocation_ListeningFailed;
-}
-else
-{
-var request = new GeolocationListeningRequest();
-var status = await Geolocation.Default.StartListeningForegroundAsync(request);
-if (status)
-{
-geolocation = "success";
-Geolocation.Default.LocationChanged += Geolocation_LocationChanged;
-Geolocation.Default.ListeningFailed += Geolocation_ListeningFailed;
-}
-}
-}
-catch (Exception ex)
-{
-message = ex.Message;
-}
-} *@
-
     public void Dispose()
     {
         Compass.Default.Stop();
@@ -135,37 +107,26 @@ message = ex.Message;
 
     private void Geolocation_LocationChanged(object? sender, GeolocationLocationChangedEventArgs e)
     {
-        try
+        Task.Run(async () =>
         {
-            speed = (e.Location.Speed ?? 0) / 1000 * 3600;
-            if (location is not null)
-                distance += location.CalculateDistance(e.Location, DistanceUnits.Kilometers);
-            location = e.Location;
-            Task.Run(async () =>
+            try
             {
-                try
+                var placemarks = await Geocoding.GetPlacemarksAsync(e.Location);
+                var placemark = placemarks?.FirstOrDefault();
+                if (placemark is not null)
                 {
-                    var placemarks = await Geocoding.GetPlacemarksAsync(location);
-                    var placemark = placemarks?.FirstOrDefault();
-                    if (placemark is not null)
-                    {
-                        locationName = string.Join(", ", placemark.AdminArea, placemark.CountryName, placemark.FeatureName, placemark.Locality,
-        placemark.PostalCode, placemark.SubAdminArea, placemark.SubLocality, placemark.SubThoroughfare,
-        placemark.Thoroughfare);
-                        await InvokeAsync(() => StateHasChanged());
-                    }
+                    locationName = string.Join(", ",
+        placemark.AdminArea, placemark.CountryName, placemark.FeatureName,
+        placemark.Locality, placemark.PostalCode, placemark.SubAdminArea,
+        placemark.SubLocality, placemark.SubThoroughfare, placemark.Thoroughfare);
+                    await InvokeAsync(() => StateHasChanged());
                 }
-                catch (Exception ex)
-                {
-                    message = ex.Message;
-                }
-            });
-            StateHasChanged();
-        }
-        catch (Exception ex)
-        {
-            message = ex.Message;
-        }
+            }
+            catch (Exception ex)
+            {
+                message = ex.Message;
+            }
+        });
     }
 
     protected override async Task OnInitializedAsync()
@@ -180,21 +141,26 @@ message = ex.Message;
                 Geolocation.Default.LocationChanged += Geolocation_LocationChanged;
                 Geolocation.Default.ListeningFailed += Geolocation_ListeningFailed;
             }
-            @* Timer timer = new(new TimerCallback(async _ =>
-{
-try
-{
-if (location is not null)
-{
 
-}
-await InvokeAsync(() => StateHasChanged());
-}
-catch (Exception ex)
-{
-message = ex.Message;
-}
-}), null, 1000, 1000); *@
+            Timer timer = new(new TimerCallback(async _ =>
+            {
+                try
+                {
+                    var location = await Geolocation.GetLocationAsync(new GeolocationRequest(GeolocationAccuracy.Best));
+                    if (location is not null)
+                    {
+                        speed = (location.Speed ?? 0) / 1000 * 3600;
+                        if (this.location is not null)
+                            distance += this.location.CalculateDistance(location, DistanceUnits.Kilometers);
+                        this.location = location;
+                    }
+                    await InvokeAsync(() => StateHasChanged());
+                }
+                catch (Exception ex)
+                {
+                    message = ex.Message;
+                }
+            }), null, 1000, 1000);
         }
         catch (Exception ex)
         {
